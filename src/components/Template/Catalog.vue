@@ -1,26 +1,70 @@
 <script setup>
-import {onMounted} from "vue";
-import axios, {Axios} from "axios";
-
+import {onMounted, reactive, ref, watch} from "vue";
+import axios from "axios";
 import Product from "@/components/Product.vue";
 import Filter from "@/components/Template/Filter.vue";
 
-let products = null;
-onMounted(() => {
-	const productsApiPath = 'https://5acc35653482aef3.mokky.dev/products'
-	products = axios.get(productsApiPath).then(response => response.data)
+const products = ref([]);
+
+const filter = reactive({
+	sortValue: '',
+	searchValue: {
+		inputValue: '',
+		inputName: ''
+	}
 })
 
-const props = defineProps({
-	products: Array
+const onChangeSelect = (event) => {
+	filter.sortValue = event.target.value
+}
+
+const onChangeSearch = (event) => {
+	event.preventDefault();
+	filter.searchValue.inputName = event.target.name
+	filter.searchValue.inputValue = `*${event.target.value}*`;
+}
+
+async function fetchProducts() {
+	let productsApiPath = 'https://5acc35653482aef3.mokky.dev/products'
+	try {
+
+		let queryParams = {
+			sortBy: filter.sortValue,
+		}
+
+		if (filter.searchValue.inputValue) {
+			let key = filter.searchValue.inputName;
+			queryParams[key] = filter.searchValue.inputValue
+		}
+
+		products.value = await axios.get(productsApiPath, {params: queryParams})
+				.then(result => result.data);
+	} catch (error) {
+		console.error(error.message)
+	}
+}
+
+// hook
+onMounted(() => {
+	fetchProducts();
+});
+
+// watches
+watch(() => filter.sortValue, () => {
+	fetchProducts('sortBy', filter.sortValue);
+})
+
+watch(() => filter.searchValue.inputValue, () => {
+	fetchProducts(filter.searchValue.inputName, filter.searchValue.inputValue)
 })
 
 const inCart = () => {
 	alert('In cart!');
 };
 
-const productsAvailable = () => {
-	return props.products ? props.products.length > 0 : false;
+// check available
+async function productsAvailable() {
+	return Object.keys(products.value).length > 0;
 }
 </script>
 
@@ -30,14 +74,18 @@ const productsAvailable = () => {
 		<div class="catalog_content" v-if="productsAvailable()">
 			<div class="section_title flex xl:flex-row sm:flex-col sm:gap-5 justify-between">
 				<h2 class="text-4xl md:text-center sm:text-center">Все кроссовки</h2>
-				<Filter/>
+				<Filter
+						:on-change-select="onChangeSelect"
+						:on-search-query="onChangeSearch"
+				/>
 			</div>
 			<div class="catalog_items grid xl:grid-cols-4 md:grid-cols-2 sm:grid-cols-1 gap-3 my-8">
 				<Product
 						v-for="product in products"
 						:key="product.id"
+						:id="Number(product.id)"
 						:title="product.title"
-						:price="product.price"
+						:price="Number(product.price)"
 						:image="product.image"
 						:is-liked="false"
 						:in-cart="false"
